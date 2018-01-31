@@ -1,0 +1,51 @@
+\subsection{infer.py}
+\label{subsec:infer.py}
+
+{\setlength{\fboxsep}{10pt}
+\scriptsize
+\begin{Verbatim}[frame=leftline, numbers=left, xleftmargin=5mm]
+import frames
+import json
+import os
+import torch
+import sys
+
+import audionet as an
+
+video_path = sys.argv[1]
+model_path = sys.argv[2]
+sample_period_msec = float(sys.argv[3])
+
+frame_data = frames.get(video_path, sample_period_msec)
+
+audionet = an.loadModel(model_path)
+softmax = torch.nn.Softmax()
+
+statistics = {
+    "video_file": os.path.basename(video_path),
+    "model_file": os.path.basename(model_path),
+    "sample_period_msec": sample_period_msec,
+    "frame_probabilities": []
+}
+
+for audio_frame in frame_data["audio_frames"]:
+    audio_tensor = torch.FloatTensor(audio_frame).unsqueeze(0)
+    audio_input = torch.autograd.Variable(audio_tensor)
+    audionet_output = audionet(audio_input)
+    audionet_probs = softmax(audionet_output)
+
+    float_probs = [float(p) for p in audionet_probs.data.squeeze(0)]
+    statistics["frame_probabilities"].append(float_probs)
+
+# Dump the inference statistics to a file.
+stats_dir = os.path.join("output", "stats", "inference", os.path.basename(model_path))
+stats_path = os.path.join(
+    stats_dir,
+    os.path.basename(video_path) + "-{}.stats.json".format(int(sample_period_msec))
+)
+os.makedirs(stats_dir , exist_ok=True)
+with open(stats_path, 'w') as jsonfile:
+    json.dump(statistics, jsonfile)
+print("Inference Statistics written to: {}".format(stats_path))
+\end{Verbatim}
+}
